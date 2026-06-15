@@ -1,0 +1,95 @@
+# Single workload manifest for the Slack queue bot.
+#
+# Why a single replica + Recreate:
+#   - SQLite allows exactly one writer.
+#   - Socket Mode holds exactly one WebSocket connection.
+#   - Recreate guarantees the old pod releases the PVC (RWO) before the new one
+#     starts, avoiding a "Multi-Attach" error on rollout.
+#
+# Tokens come from the Secret in secret.yaml (apply that first).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: slack-queue-bot-data
+  namespace: default
+  labels:
+    app: slack-queue-bot
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slack-queue-bot
+  namespace: default
+  labels:
+    app: slack-queue-bot
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: slack-queue-bot
+  template:
+    metadata:
+      labels:
+        app: slack-queue-bot
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001 # lets the non-root user write to the RWO PVC
+      containers:
+        - name: bot
+          image: hixichen/slack-queue-bot:latest
+          imagePullPolicy: Always
+          ports:
+            - name: health
+              containerPort: 8080
+          env:
+            - name: SLACK_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: slack-queue-bot
+                  key: SLACK_BOT_TOKEN
+            - name: SLACK_APP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: slack-queue-bot
+                  key: SLACK_APP_TOKEN
+            - name: DB_PATH
+              value: /app/data/bot.db
+          # Readiness: only ready while the Slack socket is connected.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          # Liveness: tolerant of transient reconnects (socketmode auto-reconnects);
+          # restarts only after ~90s of sustained failure (e.g. revoked token).
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            failureThreshold: 6
+          resources:
+            requests:
+              memory: 32Mi
+              cpu: 50m
+            limits:
+              memory: 64Mi
+              cpu: 100m
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: slack-queue-bot-data
