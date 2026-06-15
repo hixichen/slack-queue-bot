@@ -6,7 +6,16 @@
 #   - Recreate guarantees the old pod releases the PVC (RWO) before the new one
 #     starts, avoiding a "Multi-Attach" error on rollout.
 #
-# Tokens come from the Secret in secret.yaml (apply that first).
+# PREREQUISITE: the Secret named `slack-queue-bot` must already exist in this
+# namespace before applying — this manifest does NOT create it. It must contain
+# keys SLACK_BOT_TOKEN and SLACK_APP_TOKEN. Create it out of band, e.g.:
+#
+#   kubectl create secret generic slack-queue-bot \
+#     --from-literal=SLACK_BOT_TOKEN=xoxb-... \
+#     --from-literal=SLACK_APP_TOKEN=xapp-...
+#
+# (or `make k8s-secret` with the tokens in your environment). If the Secret is
+# missing, the pod stays in CreateContainerConfigError until it is created.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

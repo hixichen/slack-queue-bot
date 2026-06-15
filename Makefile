@@ -4,7 +4,7 @@ TAG ?= latest
 IMAGE := $(DOCKERHUB_REPO):$(TAG)
 COMPOSE := docker compose -f deploy/docker-compose.yml
 
-.PHONY: build test lint run clean docker-build docker-push image-release up down logs k8s-apply k8s-delete
+.PHONY: build test lint run clean docker-build docker-push image-release up down logs k8s-secret k8s-apply k8s-delete
 
 ## build: compile the binary
 build:
@@ -51,12 +51,20 @@ down:
 logs:
 	$(COMPOSE) logs -f
 
-## k8s-apply: deploy to Kubernetes (fill in deploy/k8s/secret.yaml first)
+## k8s-secret: create the prerequisite Secret from $SLACK_BOT_TOKEN / $SLACK_APP_TOKEN
+k8s-secret:
+	kubectl create secret generic slack-queue-bot \
+	  --from-literal=SLACK_BOT_TOKEN=$(SLACK_BOT_TOKEN) \
+	  --from-literal=SLACK_APP_TOKEN=$(SLACK_APP_TOKEN)
+
+## k8s-apply: deploy the workload (the Secret 'slack-queue-bot' must already exist)
 k8s-apply:
-	kubectl apply -f deploy/k8s/secret.yaml
+	@kubectl get secret slack-queue-bot >/dev/null 2>&1 || { \
+	  echo "ERROR: secret 'slack-queue-bot' not found in the current namespace."; \
+	  echo "Create it first, e.g.: make k8s-secret  (with tokens in your env)"; \
+	  exit 1; }
 	kubectl apply -f deploy/k8s/deployment.yaml
 
-## k8s-delete: remove from Kubernetes
+## k8s-delete: remove the workload (leaves the Secret untouched)
 k8s-delete:
 	kubectl delete -f deploy/k8s/deployment.yaml
-	kubectl delete -f deploy/k8s/secret.yaml

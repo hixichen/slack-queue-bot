@@ -154,18 +154,34 @@ The runtime image is Alpine-based and runs as a non-root user (UID 10001).
 
 ## Deploy to Kubernetes
 
-```bash
-# 1. base64-encode tokens and fill in deploy/k8s/secret.yaml (the data: fields)
-echo -n 'xoxb-...' | base64
-echo -n 'xapp-...' | base64
+> **The Secret is a prerequisite and must be created out of band.** This repo does
+> not ship or apply a Secret manifest — `make k8s-apply` only deploys the workload
+> and will refuse to run until the Secret `slack-queue-bot` exists in the target
+> namespace.
 
-# 2. apply Secret + workload (PVC + Deployment)
+```bash
+# 1. Create the Secret 'slack-queue-bot' (one-time, managed outside this repo).
+#    It must contain keys SLACK_BOT_TOKEN and SLACK_APP_TOKEN.
+kubectl create secret generic slack-queue-bot \
+  --from-literal=SLACK_BOT_TOKEN=xoxb-... \
+  --from-literal=SLACK_APP_TOKEN=xapp-...
+# convenience equivalent, reading the tokens from your environment:
+#   make k8s-secret
+
+# 2. Deploy the workload (PVC + Deployment). Fails fast if the Secret is missing.
 make k8s-apply
 
-# 3. verify
+# 3. Verify
 kubectl rollout status deployment/slack-queue-bot
 kubectl logs -f deployment/slack-queue-bot
 ```
+
+In a real environment the Secret is typically provisioned by your secrets tooling
+(External Secrets Operator, Sealed Secrets, Vault, CI, etc.) rather than `kubectl
+create` by hand. Either way, the deployment just references it by name.
+
+If the Secret is absent, the pod stays in `CreateContainerConfigError` until you
+create it — no redeploy needed once it exists.
 
 Deployment notes:
 

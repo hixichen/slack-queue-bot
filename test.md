@@ -201,12 +201,17 @@ make image-release DOCKERHUB_REPO=hixichen/slack-queue-bot TAG=v1.0.0
 
 ## 13. Deploy to Kubernetes
 
-```bash
-# 1. Encode tokens and fill in deploy/k8s/secret.yaml (the data: fields)
-echo -n 'xoxb-...' | base64
-echo -n 'xapp-...' | base64
+> The Secret is a **prerequisite** — it is NOT part of this repo and NOT applied by
+> `make k8s-apply`. Create it first (one time / via your secrets tooling).
 
-# 2. Apply secret + workload (PVC + Deployment)
+```bash
+# 1. Create the prerequisite Secret 'slack-queue-bot' (keys: SLACK_BOT_TOKEN, SLACK_APP_TOKEN)
+kubectl create secret generic slack-queue-bot \
+  --from-literal=SLACK_BOT_TOKEN=xoxb-... \
+  --from-literal=SLACK_APP_TOKEN=xapp-...
+# or, with tokens already in your env:  make k8s-secret
+
+# 2. Deploy the workload (PVC + Deployment) — fails fast if the Secret is missing
 make k8s-apply
 
 # 3. Verify
@@ -215,6 +220,9 @@ kubectl logs -f deployment/slack-queue-bot
 ```
 
 Notes:
+- The Secret is provisioned out of band (by hand, or via External Secrets / Sealed
+  Secrets / Vault / CI). The deployment only references it by name. If it is absent,
+  the pod stays in `CreateContainerConfigError` until it exists.
 - Single replica, `Recreate` strategy — correct for SQLite (one writer) and Socket
   Mode (one WebSocket). The old pod releases the RWO PVC before the new one starts.
 - The pod runs as non-root (UID 10001); `fsGroup` lets it write to the PVC.
