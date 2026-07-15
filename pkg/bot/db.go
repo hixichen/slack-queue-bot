@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -163,9 +162,10 @@ type scanner interface{ Scan(dest ...any) error }
 func scanItem(s scanner) (*Item, error) {
 	var it Item
 	var assigneeID, msgTS sql.NullString
-	var createdAt, updatedAt string
+	// go-sqlite3 returns DATETIME-declared columns as time.Time (UTC), so scan
+	// directly into time.Time rather than re-parsing strings.
 	err := s.Scan(&it.ID, &it.ChannelID, &it.Type, &it.Content,
-		&it.SubmitterID, &assigneeID, &it.Status, &msgTS, &createdAt, &updatedAt)
+		&it.SubmitterID, &assigneeID, &it.Status, &msgTS, &it.CreatedAt, &it.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +175,5 @@ func scanItem(s scanner) (*Item, error) {
 	if msgTS.Valid {
 		it.MsgTS = msgTS.String
 	}
-	it.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-	it.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
 	return &it, nil
 }

@@ -192,7 +192,7 @@ func parseAssignArgs(args string) (int64, string, bool) {
 	if len(parts) < 2 {
 		return 0, "", false
 	}
-	id, err := strconv.ParseInt(parts[0], 10, 64)
+	id, err := parseID(parts[0])
 	if err != nil {
 		return 0, "", false
 	}

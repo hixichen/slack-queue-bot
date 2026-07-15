@@ -166,16 +166,17 @@ Confirms per-channel isolation is working.
 make test
 ```
 
-Expected:
+Runs the full suite — storage tests against a temp SQLite file, parsing and
+formatting unit tests, and end-to-end command flows against a mock Slack API
+(`integration_test.go`). Expected tail of the output:
+
 ```
-=== RUN   TestAddAndList           --- PASS
-=== RUN   TestAssignItem           --- PASS
-=== RUN   TestDoneItem             --- PASS
-=== RUN   TestDoneItemByMsgTS      --- PASS   ← thread-based !d
-=== RUN   TestDoneItemByMsgTSNotFound --- PASS
-=== RUN   TestParseID              --- PASS
-=== RUN   TestParseAssignArgs      --- PASS
-PASS  github.com/chenxi/slack-queue-bot/pkg/bot
+--- PASS: TestIntegrationDoneInThread     ← thread-based !d, end to end
+--- PASS: TestIntegrationChannelIsolation
+--- PASS: TestDoneItemByMsgTS
+...
+PASS
+ok  github.com/chenxi/slack-queue-bot/pkg/bot
 ```
 
 ---

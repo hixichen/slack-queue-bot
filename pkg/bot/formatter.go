@@ -10,6 +10,10 @@ import (
 
 const maxContentLen = 80
 
+// maxListItems caps how many items FormatList renders. Slack rejects messages
+// with more than 50 blocks; header + divider + optional footer leave room for 47.
+const maxListItems = 47
+
 // truncate shortens s to at most n runes, appending an ellipsis. It counts
 // runes (not bytes) so multi-byte content (emoji, non-ASCII) is never cut
 // mid-character.
@@ -60,6 +64,12 @@ func FormatList(items []Item) []slack.Block {
 		slack.NewDividerBlock(),
 	}
 
+	overflow := 0
+	if len(items) > maxListItems {
+		overflow = len(items) - maxListItems
+		items = items[:maxListItems]
+	}
+
 	for _, it := range items {
 		assignee := "_unassigned_"
 		if it.AssigneeID != nil {
@@ -77,6 +87,12 @@ func FormatList(items []Item) []slack.Block {
 		blocks = append(blocks, slack.NewSectionBlock(
 			slack.NewTextBlockObject("mrkdwn", text, false, false),
 			nil, nil,
+		))
+	}
+
+	if overflow > 0 {
+		blocks = append(blocks, slack.NewContextBlock("",
+			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("…and %d more. Resolve some with `!d <id>`.", overflow), false, false),
 		))
 	}
 

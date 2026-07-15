@@ -60,7 +60,10 @@ Slack workspace ──(Socket Mode WebSocket)──▶ Go binary ──▶ SQLit
 │   ├── handlers.go         # command routing + handlers
 │   ├── formatter.go        # Block Kit / message formatting
 │   ├── types.go            # Item struct
-│   └── *_test.go           # DB + parsing + formatting tests
+│   ├── db_test.go          # storage layer tests
+│   ├── handlers_test.go    # command/arg parsing tests
+│   ├── formatter_test.go   # message rendering tests
+│   └── integration_test.go # end-to-end command flows against a mock Slack API
 └── deploy/
     ├── Dockerfile          # multi-stage, non-root runtime
     ├── docker-compose.yml  # local run
@@ -129,9 +132,27 @@ connected to Slack
 ## Test
 
 ```bash
-make test           # go test ./...
+make test           # go test ./... (unit + integration, no Slack workspace needed)
 make lint           # go vet ./...
+go test ./... -race -cover   # with race detector and coverage
 ```
+
+The suite has three layers, none of which needs Slack credentials:
+
+- **Unit tests** — command/ID parsing, message formatting, Block Kit rendering
+  (`handlers_test.go`, `formatter_test.go`).
+- **Storage tests** — every CRUD path against a real temp SQLite file, including
+  channel isolation, already-done/not-found errors, and persistence across
+  reopen (`db_test.go`).
+- **Integration tests with a mock Slack API** — `slack-go` clients accept a
+  custom base URL (`slack.OptionAPIURL`), so `integration_test.go` runs a local
+  `httptest` server that impersonates `chat.postMessage`, then drives
+  `HandleMessage` with synthetic message events. Each test asserts both what
+  landed in SQLite and exactly what the bot posted back — channel, text,
+  blocks, and `thread_ts` — covering every command, its error paths, thread
+  resolution, and that bot/edited/non-command messages are ignored.
+
+For a hands-on checklist against a real workspace, see [test.md](test.md).
 
 ---
 

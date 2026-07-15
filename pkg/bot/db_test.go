@@ -3,6 +3,7 @@ package bot
 import (
 	"os"
 	"testing"
+	"time"
 )
 
 func newTestDB(t *testing.T) *DB {
@@ -132,6 +133,98 @@ func TestDoneItemByMsgTSNotFound(t *testing.T) {
 	db := newTestDB(t)
 	if _, err := db.DoneItemByMsgTS("C001", "no.such.ts"); err != ErrNotFound {
 		t.Errorf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestItemFieldsRoundTrip(t *testing.T) {
+	db := newTestDB(t)
+	id, err := db.AddItem("C001", "work", "Update the runbook", "U001", "1700000000.42")
+	if err != nil {
+		t.Fatalf("AddItem: %v", err)
+	}
+
+	it, err := db.GetItem(id, "C001")
+	if err != nil {
+		t.Fatalf("GetItem: %v", err)
+	}
+	if it.ChannelID != "C001" || it.Type != "work" || it.Content != "Update the runbook" ||
+		it.SubmitterID != "U001" || it.MsgTS != "1700000000.42" || it.Status != "open" {
+		t.Errorf("unexpected item: %+v", it)
+	}
+	if it.AssigneeID != nil {
+		t.Errorf("expected nil assignee, got %v", *it.AssigneeID)
+	}
+}
+
+// Regression test: DATETIME columns come back from go-sqlite3 as time.Time.
+// A previous version re-parsed them as strings and silently got zero times,
+// which made !l report every item's age as hundreds of thousands of days.
+func TestItemTimestampsArePopulated(t *testing.T) {
+	db := newTestDB(t)
+	id, _ := db.AddItem("C001", "question", "Q", "U001", "ts.1")
+
+	it, err := db.GetItem(id, "C001")
+	if err != nil {
+		t.Fatalf("GetItem: %v", err)
+	}
+	for name, ts := range map[string]time.Time{"CreatedAt": it.CreatedAt, "UpdatedAt": it.UpdatedAt} {
+		if ts.IsZero() {
+			t.Errorf("%s is zero", name)
+		}
+		if d := time.Since(ts); d < -time.Minute || d > time.Minute {
+			t.Errorf("%s not close to now: %v (delta %v)", name, ts, d)
+		}
+	}
+}
+
+func TestGetItemByMsgTS(t *testing.T) {
+	db := newTestDB(t)
+	id, _ := db.AddItem("C001", "question", "Q", "U001", "1700000000.111")
+
+	it, err := db.GetItemByMsgTS("C001", "1700000000.111")
+	if err != nil {
+		t.Fatalf("GetItemByMsgTS: %v", err)
+	}
+	if it.ID != id {
+		t.Errorf("expected id %d, got %d", id, it.ID)
+	}
+	// Same ts in another channel must not match.
+	if _, err := db.GetItemByMsgTS("C999", "1700000000.111"); err != ErrNotFound {
+		t.Errorf("expected ErrNotFound cross-channel, got %v", err)
+	}
+}
+
+func TestDataSurvivesReopen(t *testing.T) {
+	f, err := os.CreateTemp("", "queue-bot-reopen-*.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	t.Cleanup(func() { os.Remove(f.Name()) })
+
+	db1, err := NewDB(f.Name())
+	if err != nil {
+		t.Fatalf("NewDB: %v", err)
+	}
+	id, err := db1.AddItem("C001", "question", "persists?", "U001", "ts.1")
+	if err != nil {
+		t.Fatalf("AddItem: %v", err)
+	}
+	if err := db1.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	db2, err := NewDB(f.Name())
+	if err != nil {
+		t.Fatalf("reopen NewDB: %v", err)
+	}
+	t.Cleanup(func() { db2.Close() })
+	it, err := db2.GetItem(id, "C001")
+	if err != nil {
+		t.Fatalf("GetItem after reopen: %v", err)
+	}
+	if it.Content != "persists?" {
+		t.Errorf("unexpected content after reopen: %q", it.Content)
 	}
 }
 
