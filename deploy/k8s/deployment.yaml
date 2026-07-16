@@ -50,8 +50,8 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
-        runAsUser: 10001
-        fsGroup: 10001 # lets the non-root user write to the RWO PVC
+        runAsUser: 65532 # chainguard/static's built-in nonroot user
+        fsGroup: 65532 # lets the non-root user write to the RWO PVC
       containers:
         - name: bot
           image: hixichen/slack-queue-bot:latest

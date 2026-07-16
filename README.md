@@ -158,18 +158,25 @@ For a hands-on checklist against a real workspace, see [test.md](test.md).
 
 ## Build & push the image
 
-Defaults to `hixichen/slack-queue-bot:latest`. Override with `DOCKERHUB_REPO` / `TAG`.
+The release version lives in one place: the `const version` in `main.go`. The
+Makefile parses it and tags images `v<version>` plus `latest`, so the code,
+image tags, and Docker Hub always agree. To cut a release, bump the constant
+and run:
 
 ```bash
 docker login
 
-make docker-build && make docker-push      # build then push
+make docker-build && make docker-push      # build then push (v<version> + latest)
 # or, from an arm64 host, build linux/amd64 and push in one step:
 make image-release
-make image-release TAG=v1.0.0              # tagged release
 ```
 
-The runtime image is Alpine-based and runs as a non-root user (UID 10001).
+Override `DOCKERHUB_REPO=...` or `TAG=...` to deviate from the defaults.
+
+The image is built from [Chainguard](https://images.chainguard.dev/) Wolfi
+bases: `chainguard/go` compiles a statically linked, CGO-free binary
+(the SQLite driver is pure Go), and the runtime is `chainguard/static` — no
+shell, no package manager, runs as the built-in non-root user (UID 65532).
 
 ---
 
@@ -209,7 +216,8 @@ Deployment notes:
 - **Single replica, `Recreate` strategy** — correct for SQLite (one writer) and
   Socket Mode (one WebSocket). The old pod releases the `ReadWriteOnce` PVC before
   the new one starts, avoiding multi-attach errors on rollout.
-- Runs as **non-root**; `fsGroup` lets the pod write to the PVC.
+- Runs as **non-root** (UID 65532, chainguard/static's nonroot user); `fsGroup`
+  lets the pod write to the PVC.
 - Liveness/readiness probe `GET /healthz` — readiness flips to not-ready the moment
   the socket drops; liveness tolerates transient reconnects (~90s before restart).
 - If you pushed under a different repo/tag, update `image:` in
@@ -227,5 +235,5 @@ kubectl delete pvc slack-queue-bot-data
 
 - **Go 1.25**
 - [`slack-go/slack`](https://github.com/slack-go/slack) — Socket Mode client
-- [`mattn/go-sqlite3`](https://github.com/mattn/go-sqlite3) — SQLite (CGO)
-- Docker (multi-stage) + Kubernetes
+- [`modernc.org/sqlite`](https://pkg.go.dev/modernc.org/sqlite) — pure-Go SQLite (no CGO)
+- [Chainguard](https://images.chainguard.dev/) `go` + `static` images (multi-stage) + Kubernetes

@@ -18,6 +18,11 @@ import (
 	"github.com/slack-go/slack/socketmode"
 )
 
+// version is the single source of truth for the release version.
+// The Makefile parses it to tag Docker images (v<version>), so code,
+// image tags, and Docker Hub stay aligned.
+const version = "0.0.1"
+
 func main() {
 	dbPath := getEnv("DB_PATH", "./data/bot.db")
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
@@ -83,7 +88,7 @@ func main() {
 		}
 	}()
 
-	log.Println("queue-bot ready")
+	log.Printf("queue-bot v%s ready", version)
 	if err := client.RunContext(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		log.Fatalf("run: %v", err)
 	}

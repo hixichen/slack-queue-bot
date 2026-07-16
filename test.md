@@ -187,15 +187,16 @@ ok  github.com/chenxi/slack-queue-bot/pkg/bot
 # Log in once
 docker login
 
-# Build and push (defaults to hixichen/slack-queue-bot:latest)
+# Build and push. The tag comes from the `const version` in main.go
+# (v<version> plus latest), so code and image versions stay aligned.
 make docker-build
 make docker-push
 
 # Or build for linux/amd64 and push in one step (use this from an arm64 Mac):
 make image-release
 
-# Override the repo or tag at any time:
-make image-release DOCKERHUB_REPO=hixichen/slack-queue-bot TAG=v1.0.0
+# Override the repo or tag if needed:
+make image-release DOCKERHUB_REPO=you/your-repo TAG=custom
 ```
 
 ---
@@ -226,7 +227,7 @@ Notes:
   the pod stays in `CreateContainerConfigError` until it exists.
 - Single replica, `Recreate` strategy — correct for SQLite (one writer) and Socket
   Mode (one WebSocket). The old pod releases the RWO PVC before the new one starts.
-- The pod runs as non-root (UID 10001); `fsGroup` lets it write to the PVC.
+- The pod runs as non-root (UID 65532); `fsGroup` lets it write to the PVC.
 - Liveness/readiness hit `GET /healthz` on port 8080, which returns 200 only while
   the Slack socket is connected.
 - If you pushed under a different repo/tag, update `image:` in

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite" // pure-Go SQLite driver: no CGO, static binaries
 )
 
 var (
@@ -17,7 +17,7 @@ type DB struct{ conn *sql.DB }
 
 // NewDB opens (or creates) the SQLite database at path and runs migrations.
 func NewDB(path string) (*DB, error) {
-	conn, err := sql.Open("sqlite3", path+"?_journal_mode=WAL&_busy_timeout=5000")
+	conn, err := sql.Open("sqlite", path+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
@@ -162,7 +162,7 @@ type scanner interface{ Scan(dest ...any) error }
 func scanItem(s scanner) (*Item, error) {
 	var it Item
 	var assigneeID, msgTS sql.NullString
-	// go-sqlite3 returns DATETIME-declared columns as time.Time (UTC), so scan
+	// The driver returns DATETIME-declared columns as time.Time (UTC), so scan
 	// directly into time.Time rather than re-parsing strings.
 	err := s.Scan(&it.ID, &it.ChannelID, &it.Type, &it.Content,
 		&it.SubmitterID, &assigneeID, &it.Status, &msgTS, &it.CreatedAt, &it.UpdatedAt)

@@ -156,7 +156,7 @@ func TestItemFieldsRoundTrip(t *testing.T) {
 	}
 }
 
-// Regression test: DATETIME columns come back from go-sqlite3 as time.Time.
+// Regression test: DATETIME columns come back from the SQLite driver as time.Time.
 // A previous version re-parsed them as strings and silently got zero times,
 // which made !l report every item's age as hundreds of thousands of days.
 func TestItemTimestampsArePopulated(t *testing.T) {
